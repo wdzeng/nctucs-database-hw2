@@ -1,273 +1,356 @@
 #include "index.h"
 
+#include <bits/stdc++.h>
+
 #include <cstdio>
 #include <cstring>
 #include <fstream>
 #include <iostream>
 #include <utility>
 #include <vector>
-//#define normal
-#define fast
-//#define fastarray
+#define key first
+#define value second
+#define MIN_INT -2147483648
+#define all(v) v.begin(), v.end()
+#define normal
 using namespace std;
-typedef pair<int, int> entry;
 
-#define CHUNK_SIZE 4096
-#ifdef fastarray
-void writeFile(int* arr, int cnt, FILE* f) {
-    char file_buffer[CHUNK_SIZE + 64];
-    int buffer_count = 0;
-    int i = 0;
+// --------------- Bplus tree ----------------
 
-    while (i < cnt) {
-        buffer_count += sprintf(&file_buffer[buffer_count], "%d\n", arr[i]);
-        i++;
-
-        // if the chunk is big enough, write it.
-        if (buffer_count >= CHUNK_SIZE) {
-            fwrite(file_buffer, CHUNK_SIZE, 1, f);
-            buffer_count -= CHUNK_SIZE;
-            memcpy(file_buffer, &file_buffer[CHUNK_SIZE], buffer_count);
-        }
-    }
-
-    // Write remainder
-    if (buffer_count > 0) {
-        fwrite(file_buffer, 1, buffer_count, f);
-    }
-}
-#endif
-#ifdef fast
-void writeFile(const vector<int>& vec, FILE* f) {
-    char file_buffer[CHUNK_SIZE + 64];
-    int buffer_count = 0;
-    int i = 0;
-    const int cnt = vec.size();
-
-    while (i < cnt) {
-        buffer_count += sprintf(&file_buffer[buffer_count], "%d\n", vec[i]);
-        i++;
-
-        // if the chunk is big enough, write it.
-        if (buffer_count >= CHUNK_SIZE) {
-            fwrite(file_buffer, CHUNK_SIZE, 1, f);
-            buffer_count -= CHUNK_SIZE;
-            memcpy(file_buffer, &file_buffer[CHUNK_SIZE], buffer_count);
-        }
-    }
-
-    // Write remainder
-    if (buffer_count > 0) {
-        fwrite(file_buffer, 1, buffer_count, f);
-    }
-}
-#endif
-
-inline entry* newEntry(int k, int v) {
-    return new entry(k, v);
-}
-
-inline entry* newEntry(int k) {
-    return new entry(k, 0);
-}
-
-Node::Node(bool leaf) : leaf(leaf) {}
-
-Node::Node(int k) : e1(newEntry(k)) {}
-
-Node::Node(int k, int v) : e1(newEntry(k, v)), leaf(true) {}
-
-Node::~Node() {
-    if (leaf) return;
-    if (l) delete l;
-    if (m) delete m;
-    if (r) delete r;
-    if (e1) delete e1;
-    if (e2) delete e2;
-}
-
-inline int Node::size() const {
-    return e2 ? 2 : 1;
-}
+// An internal node has at most M children
+const int M = 3;
 
 BPlusTree::BPlusTree() {
+    // empty
 }
 
 BPlusTree::~BPlusTree() {
-    if (root) delete root;
+    /*if (!root) return;
+    vector<void*> p = {root};
+    vector<void*> q;
+    for (int i = 0; i < level; i++) {
+        for (auto a : p) {
+            Internal* inode = (Internal*)a;
+            q.insert(q.end(), all(inode->children));
+            delete inode;
+        }
+        p.swap(q);
+    }
+    for (auto a : p) {
+        Leaf* lnode = (Leaf*)a;
+        delete lnode;
+    }*/
 }
 
 void BPlusTree::insert(int k, int v) {
+    // cout << '.' << flush;
+    // Check empty tree
     if (!root) {
-        root = new Node(k, v);
+        Leaf* l = new Leaf();
+        l->prev = l->next = NULL;
+        l->entries.emplace_back(k, v);
+        root = l;
+        // cout << '*' << endl;
         return;
     }
+    // cout << '#' << flush;
 
-    vector<Node*> vec;
-    Node* n = root;
+    // Find leaf node
+    vector<Internal*> layer;
+    void* _n = root;
+    // cout << ':' << flush;
     for (int i = 0; i < level; i++) {
-        vec.push_back(n);
-        // n is not leaf
-        if (k < n->e1->first)
-            n = n->l;
-        else if (n->e2 == NULL || k < n->e2->first)
-            n = n->m;
-        else
-            n = n->r;
+        Internal* inode = (Internal*)_n;
+        assert(inode->keys.size() >= 1);
+        // cout << inode->keys[0] << ':' << flush;
+        layer.push_back(inode);
+        _n = inode->findChildByKey(k);
     }
+    // cout << '#' << flush;
 
-    // n is leaf
-    if (k == n->e1->first) {
-        n->e1->second = v;
+    // Insert entry into leaf node
+    Leaf* lnode = (Leaf*)_n;
+    // cout << '!' << flush;
+    if (lnode->entries.size() + 1 <= M) {
+        // cout << '?' << flush;
+        lnode->insert(k, v);
+        // cout << '*' << endl;
         return;
     }
-    if (n->size() == 1) {
-        entry* e = newEntry(k, v);
-        if (k < n->e1->first) {
-            n->e2 = n->e1;
-            n->e1 = e;
-        }  //
-        else {
-            n->e2 = e;
-        }
-        return;
-    }
-    if (k == n->e2->first) {
-        n->e2->second = v;
-        return;
-    }
+    // cout << '#' << flush;
 
-    Node* prev = n->l;
-    Node* split = NULL;
-    if (k < n->e1->first) {
-        split = new Node(k, v);
-        split->e1 = newEntry(k, v);
-    }  //
-    else if (k < n->e2->first) {
-        split = new Node(true);
-        split->e1 = n->e1;
-        n->e1 = newEntry(k, v);
-    }  //
-    else {
-        split = new Node(true);
-        split->e1 = n->e1;
-        n->e1 = n->e2;
-        n->e2 = newEntry(k, v);
-    }
-    k = n->e1->first;
-    // printf("     kick up %d\n", k);
-    split->l = prev;
-    split->r = n;
-    n->l = split;
-    if (prev) prev->r = split;
-
-    while (!vec.empty()) {
-        Node* n = vec.back();
-        vec.pop_back();
-        // n is not leaf
-
-        if (n->size() == 1) {
-            if (k < n->e1->first) {
-                n->e2 = n->e1;
-                n->e1 = newEntry(k);
-                n->r = n->m;
-                n->m = n->l;
-                n->l = split;
-            }  //
-            else {
-                n->e2 = newEntry(k);
-                n->r = n->m;
-                n->m = split;
-            }
+    // Check splitting to top
+    int kick;
+    void* split = lnode->insertAndSplit(k, v, kick);
+    for (int i = level - 1; i >= 0; i--) {
+        assert(!layer.empty());
+        assert(i < layer.size());
+        Internal* inode = layer[i];
+        if (inode->keys.size() + 1 <= M - 1) {
+            inode->insert(kick, split);
+            // cout << '*' << endl;
             return;
         }
-
-        Node* newSplit = new Node(false);
-        if (k < n->e1->first) {
-            newSplit->e1 = newEntry(k);
-            newSplit->l = split;
-            newSplit->m = n->l;
-            k = n->e1->first;
-            n->e1 = n->e2;
-            n->l = n->m;
-            n->m = n->r;
-            n->r = NULL;
-            n->e2 = NULL;
-        }  //
-        else if (k < n->e2->first) {
-            newSplit->e1 = n->e1;
-            newSplit->l = n->l;
-            newSplit->m = split;
-            n->l = n->m;
-            n->m = n->r;
-            n->r = NULL;
-            n->e1 = n->e2;
-            n->e2 = NULL;
-        }  //
-        else {
-            int tmp = n->e2->first;
-            newSplit->e1 = n->e1;
-            newSplit->l = n->l;
-            newSplit->m = n->m;
-            n->l = split;
-            n->m = n->r;
-            n->r = NULL;
-            n->e1 = newEntry(k);
-            n->e2 = NULL;
-            k = tmp;
-        }
-        split = newSplit;
+        split = inode->insertAndSplit(kick, split, kick);
+        assert(split);
     }
+    // cout << '#' << flush;
 
+    // Root is splitted
     if (split) {
-        Node* newRoot = new Node(k);
-        newRoot->l = split;
-        newRoot->m = root;
-        level++;
+        Internal* newRoot = new Internal();
+        newRoot->keys.push_back(kick);
+        newRoot->children.push_back(split);
+        newRoot->children.push_back(root);
         root = newRoot;
+        level++;
+        // cout << '^' << flush;
     }
+
+    // cout << '#' << flush;
+    // cout << '*' << endl;
 }
 
 int BPlusTree::query(const int k) const {
-    if (root == NULL) return -1;
-
-    Node* n = root;
+    if (!root) return -1;
+    void* _n = root;
     for (int i = 0; i < level; i++) {
-        if (k < n->e1->first) {
-            n = n->l;
-        } else if (n->e2 == NULL || k < n->e2->first) {
-            n = n->m;
-        } else {
-            n = n->r;
+        if (i != level - 1) {
+            Internal* in = (Internal*)_n;
+            for (int x = 0; x < in->keys.size(); x++) {
+                int _key = in->keys[x];
+                Internal* _child = ((Internal*)(in->children[x]));
+                for (int cc : _child->keys) {
+                    assert(cc < _key);
+                }
+            }
+        }
+        _n = ((Internal*)_n)->findChildByKey(k);
+    }
+    return ((Leaf*)_n)->query(k);
+}
+
+int BPlusTree::query(const int l, const int r) const {
+    if (!root) return -1;
+
+    void* _n = root;
+    for (int i = 0; i < level; i++) {
+        _n = ((Internal*)_n)->findChildByKey(l);
+    }
+
+    int ret = MIN_INT;
+    Leaf* lnode = (Leaf*)_n;
+    auto lix = lower_bound(all(lnode->entries), l, [](const entry& e, const int& n) {
+        return e.key < n;
+    });
+    for (; lix != lnode->entries.end(); lix++) {
+        if (lix->key <= r)
+            ret = max(ret, lix->value);
+        else
+            return ret == MIN_INT ? -1 : ret;
+    }
+
+    lnode = lnode->next;
+    for (; lnode; lnode = lnode->next) {
+        auto lix = lnode->entries.begin();
+        for (; lix != lnode->entries.end() && lix->key <= r; lix++) {
+            ret = max(ret, lix->key);
         }
     }
-
-    if (k == n->e1->first) return n->e1->second;
-    if (n->e2 && k == n->e2->first) return n->e2->second;
-    return -1;
+    return ret == MIN_INT ? -1 : ret;
 }
 
-int BPlusTree::query(const int from, const int to) const {
-    if (root == NULL) return -1;
+// --------------- Leaf ----------------
 
-    Node* n = root;
-    for (int i = 0; i < level; i++) {
-        if (from < n->e1->first)
-            n = n->l;
-        else if (n->e2 == NULL || from < n->e2->first)
-            n = n->m;
-        else
-            n = n->r;
-    }
-
-    int ret = -(1 << 30);
-    while (n && n->e1->first <= to) {
-        if (from <= n->e1->first) ret = max(ret, n->e1->second);
-        if (n->e2 && from <= n->e2->first && n->e2->first <= to) ret = max(ret, n->e2->second);
-        n = n->r;
-    }
-    return (ret == -(1 << 30)) ? -1 : ret;
+Leaf::Leaf() {
+    // entries.reserve(M);
 }
+
+inline void Leaf::insert(int key, int value) {
+    assert(entries.size() + 1 <= M);
+    auto a = upper_bound(all(entries), key, [](const int& n, const entry& e) {
+        return n < e.key;
+    });
+    entries.insert(a, entry(key, value));
+}
+
+inline Leaf* Leaf::insertAndSplit(int key, int value, int& kick) {
+    // cout << 's' << flush;
+    assert(entries.size() == M);
+    const int reqSize = (M + 1) / 2;  // floor
+    const int remSize = M + 1 - reqSize;
+    assert(reqSize + remSize == M + 1);
+
+    Leaf* ret = new Leaf();
+    int j = 0;
+    bool put = 0;
+    for (int i = 0; i < reqSize; i++) {
+        assert(j != entries.size());
+        if (put || entries[j].key < key) {
+            assert(j < entries.size());
+            ret->entries.push_back(entries[j++]);
+        } else {
+            ret->entries.emplace_back(key, value);
+            put = 1;
+        }
+    }
+    assert(ret->entries.size() == reqSize);
+
+    for (int i = 0; i < remSize; i++) {
+        assert(j <= entries.size());
+        if (j == entries.size()) {
+            assert(!put);
+            entries[i].key = key;
+            entries[i].value = value;
+        } else if (put || entries[j].key < key) {
+            assert(j < entries.size());
+            assert(i < entries.size());
+            entries[i] = entries[j++];
+        } else {
+            assert(i < entries.size());
+            entries[i].key = key;
+            entries[i].value = value;
+            put = 1;
+        }
+    }
+    assert(remSize <= entries.size());
+    entries.resize(remSize);
+
+    ret->next = this;
+    ret->prev = prev;
+    if (prev) prev->next = ret;
+    prev = ret;
+
+    assert(entries.size() >= 1);
+    assert(ret->entries.size() >= 1);
+    assert(entries.size() + ret->entries.size() == M + 1);
+    kick = entries[0].key;
+    // cout << 'k' << kick << flush;
+
+    /*  cout << endl;
+    for (auto& e : entries) cout << e.key << ' ';
+    cout << endl;
+    for (auto& e : ret->entries) cout << e.key << ' ';
+    cout << endl;*/
+
+    for (auto& e : ret->entries) assert(e.key < kick);
+    for (auto& e : entries) assert(e.key >= kick);
+    return ret;
+}
+
+inline int Leaf::query(int key) const {
+    auto a = upper_bound(all(entries), key, [](const int& n, const entry& e) {
+        return n < e.key;
+    });
+    if (a == entries.end()) return -1;
+
+    for (auto& e : entries) cout << e.key << ' ';
+    cout << '\n'
+         << a->key << ' ' << key << '\n';
+    return a->key == key ? a->key : -1;
+}
+
+// --------------- Leaf ----------------
+
+Internal::Internal() {
+    // children.reserve(M);
+    // keys.reserve(M - 1);
+}
+
+inline void Internal::insert(int key, void* child) {
+    assert(keys.size() + 1 <= M - 1);
+    auto a = upper_bound(all(keys), key);
+    int index = a - keys.begin();
+    keys.insert(a, key);
+    // cout << 'i' << index << 'i' << flush;
+    children.insert(children.begin() + index, child);
+    // cout << '@' << flush;
+    assert(children.size() == keys.size() + 1);
+}
+
+inline Internal* Internal::insertAndSplit(int key, void* newChild, int& kick) {
+    // cout << 'S' << flush;
+    assert(keys.size() + 1 == M);
+    const int reqSize = M / 2;  // ceil;
+    const int remSize = M - 1 - reqSize;
+    assert(reqSize + remSize == M - 1);
+
+    Internal* ret = new Internal();
+    int kp = 0;
+    int cp = 0;
+    bool put = 0;
+    // cout << keys.size() << flush;
+    for (int i = 0; i < reqSize; i++) {
+        assert(kp < keys.size());
+
+        if (put || keys[kp] < key) {
+            assert(kp < keys.size());
+            ret->keys.push_back(keys[kp++]);
+            assert(cp < children.size());
+            ret->children.push_back(children[cp++]);
+        } else {
+            ret->keys.push_back(key);
+            ret->children.push_back(newChild);
+            put = 1;
+            // cout << 'p' << flush;
+        }
+    }
+    assert(ret->keys.size() == reqSize);
+    ret->children.push_back(children[cp++]);
+    assert(ret->children.size() == ret->keys.size() + 1);
+
+    assert(kp < keys.size());
+    if (put || keys[kp] < key) {
+        kick = keys[kp++];
+    } else {
+        kick = key;
+        put = 1;
+    }
+    // cout << 'k' << kick << flush;
+
+    for (int i = 0, j = 0; i < remSize; i++, j++) {
+        assert(kp <= keys.size());
+        if (kp == keys.size() || (!put && key > keys[kp])) {
+            assert(i < keys.size());
+            keys[i] = key;
+            assert(cp < children.size());
+            assert(j < children.size());
+            children[j++] = newChild;
+            assert(j < children.size());
+            children[j] = children[cp++];
+        } else {
+            assert(kp < keys.size());
+            assert(i < keys.size());
+            keys[i] = keys[kp++];
+            assert(cp < children.size());
+            assert(j < children.size());
+            children[j] = children[cp++];
+        }
+    }
+    assert(remSize <= keys.size());
+    keys.resize(remSize);
+    assert(remSize + 1 <= children.size());
+    children.resize(remSize + 1);
+
+    assert(children.size() == keys.size() + 1);
+    assert(keys.size() + ret->keys.size() == M - 1);
+    assert(children.size() + ret->children.size() == M + 1);
+    assert(is_sorted(all(keys)));
+    assert(is_sorted(all(ret->keys)));
+    return ret;
+}
+
+inline void* Internal::findChildByKey(int key) const {
+    assert(keys.size() >= 1);
+    // cout << 'f' << flush;
+    auto a = upper_bound(all(keys), key);
+    int index = a - keys.begin();
+    // cout << index << 'f' << flush;
+    assert(index < children.size());
+    return children[index];
+}
+
+// --------------- Index ----------------
 
 /**
  * Constructs a B+ tree index by inserting the key-value pairs into the B+ tree ​one by 
@@ -275,7 +358,7 @@ int BPlusTree::query(const int from, const int to) const {
  */
 Index::Index(int num_rows, const vector<int>& keys, const vector<int>& values) {
     // One by one
-    for (int i = 0; i < num_rows; i++) b.insert(keys[i], values[i]);
+    for (int i = 0; i < keys.size(); i++) b.insert(keys[i], values[i]);
 }
 
 /**
@@ -355,6 +438,6 @@ void Index::range_query(const vector<pair<int, int>>& keys) {
 }
 
 void Index::clear_index() {
-    // Leave empty
-    // The b+ tree is freed automatically when this object is destructed
+    // The b+ tree will be freed automatically when this Index object is destructed
+    // So leave empty
 }
