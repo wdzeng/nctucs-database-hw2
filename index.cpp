@@ -1,11 +1,67 @@
 #include "index.h"
 
+#include <cstdio>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <utility>
 #include <vector>
+//#define normal
+#define fast
+//#define fastarray
 using namespace std;
 typedef pair<int, int> entry;
+
+#define CHUNK_SIZE 4096
+#ifdef fastarray
+void writeFile(int* arr, int cnt, FILE* f) {
+    char file_buffer[CHUNK_SIZE + 64];
+    int buffer_count = 0;
+    int i = 0;
+
+    while (i < cnt) {
+        buffer_count += sprintf(&file_buffer[buffer_count], "%d\n", arr[i]);
+        i++;
+
+        // if the chunk is big enough, write it.
+        if (buffer_count >= CHUNK_SIZE) {
+            fwrite(file_buffer, CHUNK_SIZE, 1, f);
+            buffer_count -= CHUNK_SIZE;
+            memcpy(file_buffer, &file_buffer[CHUNK_SIZE], buffer_count);
+        }
+    }
+
+    // Write remainder
+    if (buffer_count > 0) {
+        fwrite(file_buffer, 1, buffer_count, f);
+    }
+}
+#endif
+#ifdef fast
+void writeFile(const vector<int>& vec, FILE* f) {
+    char file_buffer[CHUNK_SIZE + 64];
+    int buffer_count = 0;
+    int i = 0;
+    const int cnt = vec.size();
+
+    while (i < cnt) {
+        buffer_count += sprintf(&file_buffer[buffer_count], "%d\n", vec[i]);
+        i++;
+
+        // if the chunk is big enough, write it.
+        if (buffer_count >= CHUNK_SIZE) {
+            fwrite(file_buffer, CHUNK_SIZE, 1, f);
+            buffer_count -= CHUNK_SIZE;
+            memcpy(file_buffer, &file_buffer[CHUNK_SIZE], buffer_count);
+        }
+    }
+
+    // Write remainder
+    if (buffer_count > 0) {
+        fwrite(file_buffer, 1, buffer_count, f);
+    }
+}
+#endif
 
 inline entry* newEntry(int k, int v) {
     return new entry(k, v);
@@ -206,7 +262,7 @@ int BPlusTree::query(const int from, const int to) const {
 
     int ret = -(1 << 30);
     while (n && n->e1->first <= to) {
-        if (from <= n->e1->first && n->e1->first <= to) ret = max(ret, n->e1->second);
+        if (from <= n->e1->first) ret = max(ret, n->e1->second);
         if (n->e2 && from <= n->e2->first && n->e2->first <= to) ret = max(ret, n->e2->second);
         n = n->r;
     }
@@ -218,6 +274,7 @@ int BPlusTree::query(const int from, const int to) const {
  * one​.
  */
 Index::Index(int num_rows, const vector<int>& keys, const vector<int>& values) {
+    // One by one
     for (int i = 0; i < num_rows; i++) b.insert(keys[i], values[i]);
 }
 
@@ -226,11 +283,48 @@ Index::Index(int num_rows, const vector<int>& keys, const vector<int>& values) {
  * corresponds to the keys in query_keys; or -1 if the key is not found.
  */
 void Index::key_query(const vector<int>& keys) {
-    // ios::sync_with_stdio(false);
+#ifdef normal
     ofstream o;
     o.open("key_query_out.txt");
     for (int i = 0; i < keys.size(); i++) o << b.query(keys[i]) << '\n';
     o.close();
+#endif
+#ifdef fast
+    /*FILE* f = fopen("key_query_out.txt", "w");
+
+    char file_buffer[CHUNK_SIZE + 64];
+    int buffer_count = 0;
+    int i = 0;
+    const int cnt = keys.size();
+
+    while (i < cnt) {
+        buffer_count += sprintf(&file_buffer[buffer_count], "%d\n", b.query(keys[i]));
+        i++;
+        if (buffer_count >= CHUNK_SIZE) {
+            fwrite(file_buffer, CHUNK_SIZE, 1, f);
+            buffer_count -= CHUNK_SIZE;
+            memcpy(file_buffer, &file_buffer[CHUNK_SIZE], buffer_count);
+        }
+    }
+
+    if (buffer_count > 0) {
+        fwrite(file_buffer, 1, buffer_count, f);
+    }
+
+    fclose(f);*/
+    vector<int> ans;
+    for (int i = 0; i < keys.size(); i++) ans.push_back(b.query(keys[i]));
+    FILE* f = fopen("key_query_out.txt", "w");
+    writeFile(ans, f);
+    fclose(f);
+#endif
+#ifdef fastarray
+    int arr[keys.size()];
+    for (int i = 0; i < keys.size(); i++) arr[i] = b.query(keys[i]);
+    FILE* f = fopen("key_query_out.txt", "w");
+    writeFile(arr, keys.size(), f);
+    fclose(f);
+#endif
 }
 
 /**
@@ -238,14 +332,29 @@ void Index::key_query(const vector<int>& keys) {
  * MAXIMUM​ value in the given query key range; or -1 if no key found in the range.
  */
 void Index::range_query(const vector<pair<int, int>>& keys) {
-    // ios::sync_with_stdio(false);
+#ifdef normal
     ofstream o;
     o.open("range_query_out.txt");
     for (int i = 0; i < keys.size(); i++) o << b.query(keys[i].first, keys[i].second) << '\n';
     o.close();
+#endif
+#ifdef fast
+    vector<int> ans;
+    for (int i = 0; i < keys.size(); i++) ans.push_back(b.query(keys[i].first, keys[i].second));
+    FILE* f = fopen("range_query_out.txt", "w");
+    writeFile(ans, f);
+    fclose(f);
+#endif
+#ifdef fastarray
+    int arr[keys.size()];
+    for (int i = 0; i < keys.size(); i++) arr[i] = b.query(keys[i].first, keys[i].second);
+    FILE* f = fopen("range_query_out.txt", "w");
+    writeFile(arr, keys.size(), f);
+    fclose(f);
+#endif
 }
 
 void Index::clear_index() {
     // Leave empty
-    // The b+ tree is freed automatically
+    // The b+ tree is freed automatically when this object is destructed
 }
