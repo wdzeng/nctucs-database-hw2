@@ -1,3 +1,4 @@
+#pragma GCC optimize("O3")
 #include <utility>
 #include <vector>
 using namespace std;
@@ -56,8 +57,9 @@ class Internal {
 class Leaf {
    public:
     vector<entry> entries;
-    Leaf* prev = NULL;
-    Leaf* next = NULL;
+    Leaf* prev;
+    Leaf* next;
+    int x;
     Leaf();
     inline void insert(int key, int value);
     inline Leaf* insertAndSplit(int key, int value, int& kick);
@@ -84,7 +86,7 @@ class Index {
 
    public:
     Index(int num_rows, const vector<int>& keys, const vector<int>& values);
-    void key_query(const vector<int>& keys);
+    void key_query(vector<int>& keys);
     void range_query(const vector<pair<int, int>>& keys);
     void clear_index();
 };
