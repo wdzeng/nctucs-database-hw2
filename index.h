@@ -14,14 +14,14 @@ class Array {
     Array();
     Array(const E& e) { add(e); }
     inline void add(const E& e) {
-        assert(size < M);
+        // assert(size < M);
         store[size++] = e;
     }
     inline E& operator[](int index) { return store[index]; }
     inline const E& operator[](int index) const { return [index]; }
     inline int length() const { return size; }
     inline Array addSplit(const E& e) {
-        assert(size == M);
+        // assert(size == M);
         Array<E> ret;
         const int requireSplitSize = M / 2;
         int i = 0;
@@ -75,6 +75,7 @@ class BPlusTree {
     void insert(int k, int v);
     int query(const int k) const;
     int query(const int from, const int to) const;
+    void test(int s) const;
 };
 
 class Index {
