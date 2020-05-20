@@ -15,7 +15,9 @@
 #define all(v) v.begin(), v.end()
 using namespace std;
 // An internal node has at most M children
-const int M = 13;
+const int M = 127;
+// A leaf node has at most N entry
+const int N = 153;
 const int CHUNK_SIZE = 4096;
 inline void writeFile(const vector<int>& vec, FILE* f) {
     char buf[CHUNK_SIZE + 64];
@@ -137,7 +139,7 @@ void BPlusTree::insert(int k, int v) {
 
     // Insert entry into leaf node
     Leaf* lnode = (Leaf*)_n;
-    if (lnode->entries.size() + 1 <= M) {
+    if (lnode->entries.size() + 1 <= N) {
         lnode->insert(k, v);
         return;
     }
@@ -212,7 +214,7 @@ int BPlusTree::query(const int l, const int r) const {
 // --------------- Leaf ----------------
 
 Leaf::Leaf() {
-    entries.reserve(M);
+    entries.reserve(N);
 }
 
 inline void Leaf::insert(int key, int value) {
@@ -224,8 +226,8 @@ inline void Leaf::insert(int key, int value) {
 }
 
 inline Leaf* Leaf::insertAndSplit(int key, int value, int& kick) {
-    const int reqSize = (M + 1) / 2;  // floor
-    const int remSize = M + 1 - reqSize;
+    const int reqSize = (N + 1) / 2;  // floor
+    const int remSize = N + 1 - reqSize;
 
     Leaf* ret = new Leaf();
     int j = 0;
@@ -255,7 +257,7 @@ inline Leaf* Leaf::insertAndSplit(int key, int value, int& kick) {
         }
     }
     entries.resize(remSize);
-    entries.reserve(M);
+    entries.reserve(N);
 
     ret->next = this;
     ret->prev = prev;
