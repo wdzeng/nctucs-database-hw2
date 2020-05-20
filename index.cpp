@@ -15,7 +15,7 @@
 #define all(v) v.begin(), v.end()
 using namespace std;
 // An internal node has at most M children
-const int M = 37;
+const int M = 13;
 const int CHUNK_SIZE = 4096;
 inline void writeFile(const vector<int>& vec, FILE* f) {
     char buf[CHUNK_SIZE + 64];
@@ -99,10 +99,10 @@ BPlusTree::BPlusTree() {
 }
 
 BPlusTree::~BPlusTree() {
-    /*if (!root) return;
+    if (!root) return;
     vector<void*> p = {root};
-    vector<void*> q;
     for (int i = 0; i < level; i++) {
+        vector<void*> q;
         for (auto a : p) {
             Internal* inode = (Internal*)a;
             q.insert(q.end(), all(inode->children));
@@ -113,7 +113,7 @@ BPlusTree::~BPlusTree() {
     for (auto a : p) {
         Leaf* lnode = (Leaf*)a;
         delete lnode;
-    }*/
+    }
 }
 
 void BPlusTree::insert(int k, int v) {
@@ -335,7 +335,7 @@ inline Internal* Internal::insertAndSplit(int key, void* newChild, int& kick) {
     keys.resize(remSize);
     keys.reserve(M - 1);
     children.resize(remSize + 1);
-    children.resize(M);
+    children.reserve(M);
     return ret;
 }
 
