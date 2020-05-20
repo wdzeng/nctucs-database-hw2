@@ -1,0 +1,6 @@
+.vscode
+*.pdf
+*.chilin*
+*_out*
+time_used.txt
+hw2*
